@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/sysinfo.h>
 
 // Processes command line arguments.
 // arguments holds the specifications of the program in a list in the following order: [samples, tdelay, memory, cpu, cores].
@@ -34,52 +35,72 @@ void processArguments(int argc, char* argv[], int arguments[5]) {
     }
 }
 
-// Retrieves necessary data.
-// info contains all required information in a list in the following order: [memory_usage, cpu_usage, num_cores, core_freq].
-void retrieveData(char* info[4], bool show_memory, bool show_cpu, bool show_cores) {
+// Retrieves memory data.
+// memory_info stores [total_ram, free_ram, shared_ram, buffer_ram].
+void retrieveMemoryData(long memory_info[4]) {
     // Retrieving memory usage info.
-    if (show_memory) {
+    struct sysinfo system_info;
 
+    if (sysinfo(&system_info) != 0) {
+        fprintf(stderr, "Error getting system info\n");
+        exit(EXIT_FAILURE);
+    }
+    memory_info[0] = system_info.totalram * system_info.mem_unit;
+    memory_info[1] = system_info.freeram * system_info.mem_unit;
+    memory_info[2] = system_info.sharedram * system_info.mem_unit;
+    memory_info[3] = system_info.bufferram * system_info.mem_unit;
+}
+
+// Retrieves CPU data.
+// cpu_usage stores CPU times in the following order: [user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice].
+void retrieveCPUData(long long cpu_usage[10]) {
+    // Retrieving CPU times info.
+    FILE* fcpu_usage = fopen("/proc/stat", "r");
+    if (!fcpu_usage) {
+        fprintf(stderr, "Error reading file\n");
+        exit(EXIT_FAILURE);
     }
 
-    // Retrieving CPU usage info.
-    if (show_cpu) {
+    fscanf(fcpu_usage, "cpu  %lld %lld %lld %lld %lld %lld %lld %lld %lld %lld", 
+        &cpu_usage[0], &cpu_usage[1], &cpu_usage[2], &cpu_usage[3], &cpu_usage[4], 
+        &cpu_usage[5], &cpu_usage[6], &cpu_usage[7], &cpu_usage[8], &cpu_usage[9]);
+    
+    fclose(fcpu_usage);
+}
 
+// Retrieves cores data.
+// info will contain the number of cores and the maximum frequency in that order.
+void retrieveCoresData(char* info[2]) {
+    // Getting core max frequency data.
+    FILE* fcore_freq = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
+    if (!fcore_freq) {
+        fprintf(stderr, "Error reading file\n");
+        exit(EXIT_FAILURE);
     }
 
-    // Retrieving cores info.
-    if (show_cores) {
-        // Getting core max frequency data.
-        FILE* fcore_freq = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
-        if (!fcore_freq) {
-            fprintf(stderr, "Error reading file\n");
-            exit(EXIT_FAILURE);
-        }
+    char core_freq[64];
+    fgets(core_freq, 64, fcore_freq);
+    info[1] = core_freq;
 
-        char core_freq[64];
-        fgets(core_freq, 64, fcore_freq);
-        info[3] = core_freq;
+    fclose(fcore_freq);
 
-        fclose(fcore_freq);
-
-        // Getting number of cores
-        FILE* fcpu_info = fopen("/proc/cpuinfo", "r");
-        if (!fcpu_info) {
-            fprintf(stderr, "Error reading file\n");
-            exit(EXIT_FAILURE);
-        }
-
-        char line[320];
-        while (fgets(line, 320, fcpu_info)) {
-            if (strncmp(line, "siblings", 8) == 0) {
-                info[2] = line + 11; // Number appears at the 12th character.
-                info[2][strlen(info[2]) - 1] = '\0'; // Removing the \n.
-                break;
-            }
-        }
-
-        fclose(fcpu_info);
+    // Getting number of cores
+    FILE* fcpuinfo = fopen("/proc/cpuinfo", "r");
+    if (!fcpuinfo) {
+        fprintf(stderr, "Error reading file\n");
+        exit(EXIT_FAILURE);
     }
+
+    char line[320];
+    while (fgets(line, 320, fcpuinfo)) {
+        if (strncmp(line, "siblings", 8) == 0) {
+            info[0] = line + 11; // Number appears at the 12th character.
+            info[0][strlen(info[0]) - 1] = '\0'; // Removing the \n.
+            break;
+        }
+    }
+
+    fclose(fcpuinfo);
 }
 
 // Delays program by microseconds microseconds.
@@ -109,12 +130,30 @@ int main(int argc, char* argv[]) {
     int show_cpu = arguments[3];
     int show_cores = arguments[4];
 
+    // memory_info stores [total_ram, free_ram, shared_ram, buffer_ram].
+    long memory_info[4];
+
+    // previous_cpu_usage and current_cpu_usage stores CPU times in the following order: 
+    // [user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice].
+    long long previous_cpu_usage[10];
+    long long current_cpu_usage[10];
+    if (show_cpu) {
+        // Retrieve initial CPU data.
+        retrieveCPUData(current_cpu_usage);
+
+        // Wait tdelay microseconds.
+        delay(tdelay);
+    }
+
     // Main loop
     for (int i = 0; i < samples; i++) {
         // Retrieve data.
-        // info contains all required information in a list in the following order: [memory_usage, cpu_usage, num_cores, core_freq].
-        char* info[4];
-        retrieveData(info, show_memory, show_cpu, show_cores);
+        if (show_memory) retrieveMemoryData(memory_info);
+        if (show_cpu) {
+            // Update previous CPU data and retrieve the new data.
+            memcpy(previous_cpu_usage, current_cpu_usage, 10 * sizeof(current_cpu_usage[0]));
+            retrieveCPUData(current_cpu_usage);
+        }
 
         // Process data.
 
@@ -125,17 +164,23 @@ int main(int argc, char* argv[]) {
 
         if (show_cpu) {
             // Print CPU utilization.
-        }
 
-        if (show_cores) {
-            // Print cores and frequency.
-            printf("Num cores: %d, Max freq: %d\n", atoi(info[2]), atoi(info[3]));
+            printf("%lld", current_cpu_usage[0] - previous_cpu_usage[0]);
         }
 
         printf("a");
 
         // Waits tdelay microseconds.
         delay(tdelay);
+    }
+
+    
+    // cores_info contains the number of cores and the maximum frequency in that order.
+    char* cores_info[2];
+    if (show_cores) retrieveCoresData(cores_info);
+    if (show_cores) {
+        // Print cores and frequency.
+        printf("Num cores: %d, Max freq: %d\n", atoi(cores_info[0]), atoi(cores_info[1]));
     }
     
     exit(EXIT_SUCCESS);
