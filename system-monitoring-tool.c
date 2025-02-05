@@ -37,12 +37,11 @@ void processArguments(int argc, char* argv[], int arguments[5]) {
         else if (strcmp(argv[i], "--cores") == 0) arguments[4] = true;
         else if (strncmp(argv[i], "--samples=", 10) == 0) arguments[0] = atoi(argv[i] + 10);
         else if (strncmp(argv[i], "--tdelay=", 9) == 0) arguments[1] = atoi(argv[i] + 9);
-        else if (true) {
-            if (i == 1) arguments[0] = atoi(argv[i]);
-            else if (i == 2) arguments[1] = atoi(argv[i]);
-        }
+        else if (i == 1) arguments[0] = atoi(argv[i]);
+        else if (i == 2) arguments[1] = atoi(argv[i]);
     }
 
+    // If neither memory, CPU, nor cores are specified, show all three. 
     if (!arguments[2] && !arguments[3] && !arguments[4]) {
         arguments[2] = true;
         arguments[3] = true;
@@ -53,15 +52,16 @@ void processArguments(int argc, char* argv[], int arguments[5]) {
 
 // Retrieval functions
 // Retrieves memory data.
-// memory_info stores [total_ram, free_ram, shared_ram, buffer_ram].
+// memory_info stores [total_ram, free_ram].
 void retrieveMemoryData(long memory_info[2]) {
     // Retrieving memory usage info.
     struct sysinfo system_info;
-
     if (sysinfo(&system_info) != 0) {
         fprintf(stderr, "Error getting system info\n");
         exit(EXIT_FAILURE);
     }
+
+    // Setting the total RAM and free RAM.
     memory_info[0] = system_info.totalram * system_info.mem_unit;
     memory_info[1] = system_info.freeram * system_info.mem_unit;
 }
@@ -76,6 +76,7 @@ void retrieveCPUData(long long cpu_usage[10]) {
         exit(EXIT_FAILURE);
     }
 
+    // Getting CPU times from /proc/stat. First line is always "cpu" followed by the respective times.
     fscanf(fcpu_usage, "cpu  %lld %lld %lld %lld %lld %lld %lld %lld %lld %lld", 
         &cpu_usage[0], &cpu_usage[1], &cpu_usage[2], &cpu_usage[3], &cpu_usage[4], 
         &cpu_usage[5], &cpu_usage[6], &cpu_usage[7], &cpu_usage[8], &cpu_usage[9]);
@@ -93,11 +94,13 @@ void retrieveCoresData(long info[2]) {
         exit(EXIT_FAILURE);
     }
 
+    // Getting max core frequency from the file. The file only contains one line with the max frequency in kHz. 
     char core_freq[64];
     fgets(core_freq, 64, fcore_freq);
     info[1] = atoi(core_freq);
 
     fclose(fcore_freq);
+
 
     // Getting number of cores
     FILE* fcpuinfo = fopen("/proc/cpuinfo", "r");
@@ -106,6 +109,8 @@ void retrieveCoresData(long info[2]) {
         exit(EXIT_FAILURE);
     }
 
+    // Searching through the document for a line that starts with "siblings".
+    // Once found getting the corresponding number and setting num_cores.
     char line[320];
     while (fgets(line, 320, fcpuinfo)) {
         if (strncmp(line, "siblings", 8) == 0) {
@@ -124,6 +129,7 @@ void retrieveCoresData(long info[2]) {
 // Processing functions
 // Processes the memory usage and sets the values of total_memory and used_memory.
 void processMemoryUtilization(long memory_info[2], double* total_memory, double* used_memory) {
+    // Converting to GiB and finding the used memory.
     *total_memory = memory_info[0] / (1024.0 * 1024 * 1024);
     *used_memory = (memory_info[0] - memory_info[1]) / (1024.0 * 1024 * 1024);
 }
