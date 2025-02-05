@@ -15,8 +15,9 @@
 #define MOVE_CURSOR "\x1b[%d;%df"
 
 // Formatting macros
-#define CORES_SECTION_START_ROW 32
-#define CPU_SECTION_START_ROW 17
+#define THIRD_SECTION_START_ROW 32
+#define SECOND_SECTION_START_ROW 18
+#define FIRST_SECTION_START_ROW 3
 
 // Processes command line arguments.
 // arguments holds the specifications of the program in a list in the following order: [samples, tdelay, memory, cpu, cores].
@@ -45,9 +46,11 @@ void processArguments(int argc, char* argv[], int arguments[5]) {
     }
 }
 
+
+// Retrieval functions
 // Retrieves memory data.
 // memory_info stores [total_ram, free_ram, shared_ram, buffer_ram].
-void retrieveMemoryData(long memory_info[4]) {
+void retrieveMemoryData(long memory_info[2]) {
     // Retrieving memory usage info.
     struct sysinfo system_info;
 
@@ -57,8 +60,6 @@ void retrieveMemoryData(long memory_info[4]) {
     }
     memory_info[0] = system_info.totalram * system_info.mem_unit;
     memory_info[1] = system_info.freeram * system_info.mem_unit;
-    memory_info[2] = system_info.sharedram * system_info.mem_unit;
-    memory_info[3] = system_info.bufferram * system_info.mem_unit;
 }
 
 // Retrieves CPU data.
@@ -74,7 +75,7 @@ void retrieveCPUData(long long cpu_usage[10]) {
     fscanf(fcpu_usage, "cpu  %lld %lld %lld %lld %lld %lld %lld %lld %lld %lld", 
         &cpu_usage[0], &cpu_usage[1], &cpu_usage[2], &cpu_usage[3], &cpu_usage[4], 
         &cpu_usage[5], &cpu_usage[6], &cpu_usage[7], &cpu_usage[8], &cpu_usage[9]);
-    
+
     fclose(fcpu_usage);
 }
 
@@ -115,6 +116,14 @@ void retrieveCoresData(long info[2]) {
     fclose(fcpuinfo);
 }
 
+
+// Processing functions
+// Processes the memory usage and sets the values of total_memory and used_memory.
+void processMemoryUtilization(long memory_info[2], double* total_memory, double* used_memory) {
+    *total_memory = memory_info[0] / (1024.0 * 1024 * 1024);
+    *used_memory = (memory_info[0] - memory_info[1]) / (1024.0 * 1024 * 1024);
+}
+
 // Processes the CPU usage and returns the percent usage.
 double processCPUUtilization(long long previous_cpu_usage[10], long long current_cpu_usage[10]) {
     long long total_time = 0;
@@ -125,41 +134,65 @@ double processCPUUtilization(long long previous_cpu_usage[10], long long current
     return 100.0 - ((100.0 * idle_time) / (1.0 * total_time));
 }
 
-// Prints the formatted CPU utilization graph.
-void outputCPUUtilization(double precent_usage, int current_sample, int total_samples) {
+
+// Output functions
+// Prints the formatted memory utilization graph.
+void outputMemoryUtilization(double total_memory, double used_memory, int current_sample, int total_samples, int start_row) {
     // Move cursor to start of CPU section.
-    printf(MOVE_CURSOR, CPU_SECTION_START_ROW, 0);
-    printf("v CPU  %.2f %%", precent_usage);
+    printf(MOVE_CURSOR, start_row, 0);
+    printf("v Memory  %.2f GB", used_memory);
 
     // Printing the axes.
-    printf(MOVE_CURSOR, CPU_SECTION_START_ROW + 1, 0);
-    printf("  100%%");
-    printf(MOVE_CURSOR, CPU_SECTION_START_ROW + 11, 0);
-    printf("    0%% ");
+    printf(MOVE_CURSOR, start_row + 1, 2);
+    printf("%.0f GB", total_memory);
+    printf(MOVE_CURSOR, start_row + 13, (int)floor(log10(total_memory)) + 2);
+    printf("0 GB ");
     for (int i = 0; i < total_samples + 2; i++) printf("-");
-    for (int i = 0; i < 10; i++) {
-        printf(MOVE_CURSOR, CPU_SECTION_START_ROW + 1 + i, 8);
+    for (int i = 0; i < 12; i++) {
+        printf(MOVE_CURSOR, start_row + 1 + i, 6 + (int)floor(log10(total_memory)) + 1);
         printf("|");
     }
 
     // Printing the graph.
-    printf(MOVE_CURSOR, CPU_SECTION_START_ROW + 11 - (int)ceil(precent_usage / 10.0), 9 + current_sample);
+    printf(MOVE_CURSOR, start_row + 13 - (int)ceil(12 * used_memory / total_memory), 7 + (int)floor(log10(total_memory)) + 1 + current_sample);
+    printf("#");
+}
+
+// Prints the formatted CPU utilization graph.
+void outputCPUUtilization(double precent_usage, int current_sample, int total_samples, int start_row) {
+    // Move cursor to start of CPU section.
+    printf(MOVE_CURSOR, start_row, 0);
+    printf("v CPU  %.2f %%", precent_usage);
+
+    // Printing the axes.
+    printf(MOVE_CURSOR, start_row + 1, 0);
+    printf("  100%%");
+    printf(MOVE_CURSOR, start_row + 11, 0);
+    printf("    0%% ");
+    for (int i = 0; i < total_samples + 2; i++) printf("-");
+    for (int i = 0; i < 10; i++) {
+        printf(MOVE_CURSOR, start_row + 1 + i, 8);
+        printf("|");
+    }
+
+    // Printing the graph.
+    printf(MOVE_CURSOR, start_row + 11 - (int)ceil(precent_usage / 10.0), 9 + current_sample);
     printf(":");
 }
 
 // Prints the formatted core info.
-void outputCores(long num_cores, long max_freq) {
+void outputCores(long num_cores, long max_freq, int start_row) {
     // Move cursor to start of cores section.
-    printf(MOVE_CURSOR, CORES_SECTION_START_ROW, 0); 
+    printf(MOVE_CURSOR, start_row, 0); 
     printf("v Number of Cores: %ld @ %.2f GHz", num_cores, max_freq / 1000000.0);
 
     // Print a core for each core.
     for (int i = 0; i < num_cores; i++) {
-        printf(MOVE_CURSOR, CORES_SECTION_START_ROW + 1 + 3 * (i / 4), 7 * (i % 4) + 1);
+        printf(MOVE_CURSOR, start_row + 1 + 3 * (i / 4), 7 * (i % 4) + 1);
         printf("  +---+");
-        printf(MOVE_CURSOR, CORES_SECTION_START_ROW + 1 + 3 * (i / 4) + 1, 7 * (i % 4) + 1);
+        printf(MOVE_CURSOR, start_row + 1 + 3 * (i / 4) + 1, 7 * (i % 4) + 1);
         printf("  |   |");
-        printf(MOVE_CURSOR, CORES_SECTION_START_ROW + 1 + 3 * (i / 4) + 2, 7 * (i % 4) + 1);
+        printf(MOVE_CURSOR, start_row + 1 + 3 * (i / 4) + 2, 7 * (i % 4) + 1);
         printf("  +---+");
     }
 
@@ -199,13 +232,16 @@ int main(int argc, char* argv[]) {
     printf(MOVE_CURSOR_TOP_LEFT);
     printf("Nbr of samples: %d -- every %d microSecs (%.3f secs)", samples, tdelay, tdelay / 1000000.0);
 
+
     // memory_info stores [total_ram, free_ram, shared_ram, buffer_ram].
-    long memory_info[4];
+    long memory_info[2];
 
     // previous_cpu_usage and current_cpu_usage stores CPU times in the following order: 
     // [user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice].
     long long previous_cpu_usage[10];
     long long current_cpu_usage[10];
+
+
     if (show_cpu) {
         // Retrieve initial CPU data.
         retrieveCPUData(current_cpu_usage);
@@ -224,16 +260,19 @@ int main(int argc, char* argv[]) {
             retrieveCPUData(current_cpu_usage);
         }
 
-        // Process data.
 
         // Output data.
         if (show_memory) {
             // Print memory utilization.
+            double total_memory = 0;
+            double used_memory = 0;
+            processMemoryUtilization(memory_info, &total_memory, &used_memory);
+            outputMemoryUtilization(total_memory, used_memory, i, samples, FIRST_SECTION_START_ROW);
         }
 
         if (show_cpu) {
             // Print CPU utilization.
-            outputCPUUtilization(processCPUUtilization(previous_cpu_usage, current_cpu_usage), i, samples);
+            outputCPUUtilization(processCPUUtilization(previous_cpu_usage, current_cpu_usage), i, samples, show_memory ? SECOND_SECTION_START_ROW : FIRST_SECTION_START_ROW);
         }
 
         // Waits tdelay microseconds.
@@ -247,9 +286,12 @@ int main(int argc, char* argv[]) {
         retrieveCoresData(cores_info);
 
         // Output cores and frequency.
-        outputCores(cores_info[0], cores_info[1]);
+        int cores_start_row = show_memory || show_cpu ? SECOND_SECTION_START_ROW : FIRST_SECTION_START_ROW;
+        if (show_cpu && show_memory) cores_start_row = THIRD_SECTION_START_ROW;
+        outputCores(cores_info[0], cores_info[1], cores_start_row);
     }
     
+
     // Move cursor to bottom left.
     printf(MOVE_CURSOR, 999, 0);
     exit(EXIT_SUCCESS);
