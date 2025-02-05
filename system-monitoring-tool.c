@@ -23,20 +23,24 @@
 // arguments holds the specifications of the program in a list in the following order: [samples, tdelay, memory, cpu, cores].
 // memory, cpu, and cores are boolean values.
 void processArguments(int argc, char* argv[], int arguments[5]) {
+    // Standard values of samples and tdelay are 20 and 500000 respectively.
     arguments[0] = 20;
     arguments[1] = 500000;
     arguments[2] = false;
     arguments[3] = false;
     arguments[4] = false;
 
+    // Checking for flags
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--memory") == 0) arguments[2] = true;
         else if (strcmp(argv[i], "--cpu") == 0) arguments[3] = true;
         else if (strcmp(argv[i], "--cores") == 0) arguments[4] = true;
         else if (strncmp(argv[i], "--samples=", 10) == 0) arguments[0] = atoi(argv[i] + 10);
         else if (strncmp(argv[i], "--tdelay=", 9) == 0) arguments[1] = atoi(argv[i] + 9);
-        else if (i == 1) arguments[0] = atoi(argv[i]);
-        else if (i == 2) arguments[1] = atoi(argv[i]);
+        else if (true) {
+            if (i == 1) arguments[0] = atoi(argv[i]);
+            else if (i == 2) arguments[1] = atoi(argv[i]);
+        }
     }
 
     if (!arguments[2] && !arguments[3] && !arguments[4]) {
@@ -140,7 +144,7 @@ double processCPUUtilization(long long previous_cpu_usage[10], long long current
 void outputMemoryUtilization(double total_memory, double used_memory, int current_sample, int total_samples, int start_row) {
     // Move cursor to start of CPU section.
     printf(MOVE_CURSOR, start_row, 0);
-    printf("v Memory  %.2f GB", used_memory);
+    printf("v Memory  %.2f GB         ", used_memory);
 
     // Printing the axes.
     printf(MOVE_CURSOR, start_row + 1, 2);
@@ -162,7 +166,7 @@ void outputMemoryUtilization(double total_memory, double used_memory, int curren
 void outputCPUUtilization(double precent_usage, int current_sample, int total_samples, int start_row) {
     // Move cursor to start of CPU section.
     printf(MOVE_CURSOR, start_row, 0);
-    printf("v CPU  %.2f %%", precent_usage);
+    printf("v CPU  %.2f %%              ", precent_usage);
 
     // Printing the axes.
     printf(MOVE_CURSOR, start_row + 1, 0);
