@@ -41,6 +41,10 @@ void processArguments(int argc, char* argv[], int arguments[5]) {
         else if (i == 2) arguments[1] = atoi(argv[i]);
     }
 
+    // If samples or delay are invalid, set to default value.
+    if (arguments[0] <= 0) arguments[0] = 20;
+    if (arguments[1] <= 0) arguments[1] = 500000;
+
     // If neither memory, CPU, nor cores are specified, show all three. 
     if (!arguments[2] && !arguments[3] && !arguments[4]) {
         arguments[2] = true;
