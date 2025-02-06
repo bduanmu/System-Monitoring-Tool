@@ -136,11 +136,14 @@ void processMemoryUtilization(long memory_info[2], double* total_memory, double*
 
 // Processes the CPU usage and returns the percent usage.
 double processCPUUtilization(long long previous_cpu_usage[10], long long current_cpu_usage[10]) {
+    // Finding the difference in total time.
     long long total_time = 0;
     for (int i = 0; i < 10; i++) total_time += current_cpu_usage[i] - previous_cpu_usage[i];
 
+    // Finding the difference in idle time.
     long long idle_time = current_cpu_usage[3] - previous_cpu_usage[3] + current_cpu_usage[4] - previous_cpu_usage[4];
 
+    // Returning CPU usage.
     return 100.0 - ((100.0 * idle_time) / (1.0 * total_time));
 }
 
@@ -196,7 +199,7 @@ void outputCores(long num_cores, long max_freq, int start_row) {
     printf(MOVE_CURSOR, start_row, 0); 
     printf("v Number of Cores: %ld @ %.2f GHz", num_cores, max_freq / 1000000.0);
 
-    // Print a core for each core.
+    // Print a square for each core.
     for (int i = 0; i < num_cores; i++) {
         printf(MOVE_CURSOR, start_row + 1 + 3 * (i / 4), 7 * (i % 4) + 1);
         printf("  +---+");
