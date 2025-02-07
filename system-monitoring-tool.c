@@ -14,18 +14,29 @@
 #define MOVE_CURSOR_TOP_LEFT "\033[H"
 #define MOVE_CURSOR "\x1b[%d;%df"
 
-// Formatting macros
-#define THIRD_SECTION_START_ROW 32
-#define SECOND_SECTION_START_ROW 18
-#define FIRST_SECTION_START_ROW 3
+// Formatting
+#define THIRD_SECTION_START_ROW SECOND_SECTION_START_ROW + CPU_GRAPH_HEIGHT + SPACER
+#define SECOND_SECTION_START_ROW FIRST_SECTION_START_ROW + MEM_GRAPH_HEIGHT + SPACER
+#define FIRST_SECTION_START_ROW SPACER
+#define MEM_GRAPH_HEIGHT 12
+#define CPU_GRAPH_HEIGHT 10
+#define SPACER 3
+
+// Standard values
+#define STANDARD_SAMPLES 20
+#define STANDARD_TDELAY 500000
+
+// Units
+#define METRIC_CONVERSION 1000
+#define BYTES_CONVERSION 1024
 
 // Processes command line arguments.
 // arguments holds the specifications of the program in a list in the following order: [samples, tdelay, memory, cpu, cores].
 // memory, cpu, and cores are boolean values.
 void processArguments(int argc, char* argv[], int arguments[5]) {
     // Standard values of samples and tdelay are 20 and 500000 respectively.
-    arguments[0] = 20;
-    arguments[1] = 500000;
+    arguments[0] = STANDARD_SAMPLES;
+    arguments[1] = STANDARD_TDELAY;
     arguments[2] = false;
     arguments[3] = false;
     arguments[4] = false;
@@ -42,8 +53,8 @@ void processArguments(int argc, char* argv[], int arguments[5]) {
     }
 
     // If samples or delay are invalid, set to default value.
-    if (arguments[0] <= 0) arguments[0] = 20;
-    if (arguments[1] <= 0) arguments[1] = 500000;
+    if (arguments[0] <= 0) arguments[0] = STANDARD_SAMPLES;
+    if (arguments[1] <= 0) arguments[1] = STANDARD_TDELAY;
 
     // If neither memory, CPU, nor cores are specified, show all three. 
     if (!arguments[2] && !arguments[3] && !arguments[4]) {
@@ -134,8 +145,8 @@ void retrieveCoresData(long info[2]) {
 // Processes the memory usage and sets the values of total_memory and used_memory.
 void processMemoryUtilization(long memory_info[2], double* total_memory, double* used_memory) {
     // Converting to GiB and finding the used memory.
-    *total_memory = memory_info[0] / (1024.0 * 1024 * 1024);
-    *used_memory = (memory_info[0] - memory_info[1]) / (1024.0 * 1024 * 1024);
+    *total_memory = memory_info[0] / (float)(BYTES_CONVERSION * BYTES_CONVERSION * BYTES_CONVERSION);
+    *used_memory = (memory_info[0] - memory_info[1]) / (float)(BYTES_CONVERSION * BYTES_CONVERSION * BYTES_CONVERSION);
 }
 
 // Processes the CPU usage and returns the percent usage.
@@ -162,16 +173,17 @@ void outputMemoryUtilization(double total_memory, double used_memory, int curren
     // Printing the axes.
     printf(MOVE_CURSOR, start_row + 1, 2);
     printf("%.0f GB", total_memory);
-    printf(MOVE_CURSOR, start_row + 13, (int)floor(log10(total_memory)) + 2);
+    printf(MOVE_CURSOR, start_row + MEM_GRAPH_HEIGHT + 1, (int)floor(log10(total_memory)) + 2);
     printf("0 GB ");
     for (int i = 0; i < total_samples + 2; i++) printf("-");
-    for (int i = 0; i < 12; i++) {
-        printf(MOVE_CURSOR, start_row + 1 + i, 6 + (int)floor(log10(total_memory)) + 1);
+    for (int i = 0; i < MEM_GRAPH_HEIGHT; i++) {
+        printf(MOVE_CURSOR, start_row + 1 + i, 7 + (int)floor(log10(total_memory)));
         printf("|");
     }
 
     // Printing the graph.
-    printf(MOVE_CURSOR, start_row + 13 - (int)ceil(12 * used_memory / total_memory), 7 + (int)floor(log10(total_memory)) + 1 + current_sample);
+    printf(MOVE_CURSOR, start_row + (MEM_GRAPH_HEIGHT + 1) - (int)ceil(MEM_GRAPH_HEIGHT * used_memory / total_memory), 
+        7 + (int)floor(log10(total_memory)) + 1 + current_sample);
     printf("#");
 }
 
@@ -184,16 +196,16 @@ void outputCPUUtilization(double precent_usage, int current_sample, int total_sa
     // Printing the axes.
     printf(MOVE_CURSOR, start_row + 1, 0);
     printf("  100%%");
-    printf(MOVE_CURSOR, start_row + 11, 0);
+    printf(MOVE_CURSOR, start_row + CPU_GRAPH_HEIGHT + 1, 0);
     printf("    0%% ");
     for (int i = 0; i < total_samples + 2; i++) printf("-");
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < CPU_GRAPH_HEIGHT; i++) {
         printf(MOVE_CURSOR, start_row + 1 + i, 8);
         printf("|");
     }
 
     // Printing the graph.
-    printf(MOVE_CURSOR, start_row + 11 - (int)ceil(precent_usage / 10.0), 9 + current_sample);
+    printf(MOVE_CURSOR, start_row + (CPU_GRAPH_HEIGHT + 1) - (int)ceil(CPU_GRAPH_HEIGHT * precent_usage / 100.0), 9 + current_sample);
     printf(":");
 }
 
@@ -201,7 +213,7 @@ void outputCPUUtilization(double precent_usage, int current_sample, int total_sa
 void outputCores(long num_cores, long max_freq, int start_row) {
     // Move cursor to start of cores section.
     printf(MOVE_CURSOR, start_row, 0); 
-    printf("v Number of Cores: %ld @ %.2f GHz", num_cores, max_freq / 1000000.0);
+    printf("v Number of Cores: %ld @ %.2f GHz", num_cores, max_freq / (float)(METRIC_CONVERSION * METRIC_CONVERSION));
 
     // Print a square for each core.
     for (int i = 0; i < num_cores; i++) {
@@ -226,7 +238,7 @@ void delay(unsigned int microseconds) {
 
     do {
         clock_gettime(CLOCK_MONOTONIC, &end);
-        elapsed = (end.tv_sec - start.tv_sec) * 1000000L + (end.tv_nsec - start.tv_nsec) / 1000L;
+        elapsed = (end.tv_sec - start.tv_sec) * (long)(METRIC_CONVERSION * METRIC_CONVERSION)  + (end.tv_nsec - start.tv_nsec) / (long)METRIC_CONVERSION;
     } while (elapsed < microseconds);
 }
 
@@ -247,7 +259,7 @@ int main(int argc, char* argv[]) {
     // Output number of samples and the delay between each sample.
     printf(CLEAR);
     printf(MOVE_CURSOR_TOP_LEFT);
-    printf("Nbr of samples: %d -- every %d microSecs (%.3f secs)", samples, tdelay, tdelay / 1000000.0);
+    printf("Nbr of samples: %d -- every %d microSecs (%.3f secs)", samples, tdelay, tdelay / (float)(METRIC_CONVERSION * METRIC_CONVERSION));
 
 
     // memory_info stores [total_ram, free_ram, shared_ram, buffer_ram].
@@ -268,32 +280,34 @@ int main(int argc, char* argv[]) {
     }
 
     // Main loop
-    for (int i = 0; i < samples; i++) {
-        // Retrieve data.
-        if (show_memory) retrieveMemoryData(memory_info);
-        if (show_cpu) {
-            // Update previous CPU data and retrieve the new data.
-            memcpy(previous_cpu_usage, current_cpu_usage, 10 * sizeof(current_cpu_usage[0]));
-            retrieveCPUData(current_cpu_usage);
+    if (show_cpu || show_memory) {
+        for (int i = 0; i < samples; i++) {
+            // Retrieve data.
+            if (show_memory) retrieveMemoryData(memory_info);
+            if (show_cpu) {
+                // Update previous CPU data and retrieve the new data.
+                memcpy(previous_cpu_usage, current_cpu_usage, 10 * sizeof(current_cpu_usage[0]));
+                retrieveCPUData(current_cpu_usage);
+            }
+
+
+            // Output data.
+            if (show_memory) {
+                // Print memory utilization.
+                double total_memory = 0;
+                double used_memory = 0;
+                processMemoryUtilization(memory_info, &total_memory, &used_memory);
+                outputMemoryUtilization(total_memory, used_memory, i, samples, FIRST_SECTION_START_ROW);
+            }
+
+            if (show_cpu) {
+                // Print CPU utilization.
+                outputCPUUtilization(processCPUUtilization(previous_cpu_usage, current_cpu_usage), i, samples, show_memory ? SECOND_SECTION_START_ROW : FIRST_SECTION_START_ROW);
+            }
+
+            // Waits tdelay microseconds.
+            delay(tdelay);
         }
-
-
-        // Output data.
-        if (show_memory) {
-            // Print memory utilization.
-            double total_memory = 0;
-            double used_memory = 0;
-            processMemoryUtilization(memory_info, &total_memory, &used_memory);
-            outputMemoryUtilization(total_memory, used_memory, i, samples, FIRST_SECTION_START_ROW);
-        }
-
-        if (show_cpu) {
-            // Print CPU utilization.
-            outputCPUUtilization(processCPUUtilization(previous_cpu_usage, current_cpu_usage), i, samples, show_memory ? SECOND_SECTION_START_ROW : FIRST_SECTION_START_ROW);
-        }
-
-        // Waits tdelay microseconds.
-        delay(tdelay);
     }
 
     
