@@ -238,7 +238,8 @@ void delay(unsigned int microseconds) {
 
     do {
         clock_gettime(CLOCK_MONOTONIC, &end);
-        elapsed = (end.tv_sec - start.tv_sec) * (long)(METRIC_CONVERSION * METRIC_CONVERSION)  + (end.tv_nsec - start.tv_nsec) / (long)METRIC_CONVERSION;
+        elapsed = (end.tv_sec - start.tv_sec) * (long)(METRIC_CONVERSION * METRIC_CONVERSION)
+            + (end.tv_nsec - start.tv_nsec) / (long)METRIC_CONVERSION;
     } while (elapsed < microseconds);
 }
 

@@ -17,6 +17,8 @@ In the case both the positional arguments and `--samples=N` or `--tdelay-T` or m
 
 The number of samples and the delay should both be positive integers. Should invalid inputs (i.e. 0, -12, "akljf") be passed in, the default values will be used. For the sake of accuracy and formatting, **it is assumed that the number of samples is less than the width of the terminal and the delay is greater than 10000 microseconds.** The program still runs with such inputs, but unexpected results may occur. 
 
+**It is also assumed the user does not resize their terminal while the program is running, as otherwise the graphs will be outputted incorrectly.**
+
 Examples:
 * `./system-monitoring-tool`
     * 20 samples with 500000 microseconds delay, showing memory usage, CPU usage, and cores info.
@@ -48,3 +50,12 @@ Memory usage is processed by `processMemoryUtilization`. This function processes
 CPU usage is processed by `processCPUUtilization`. This function takes in two sets of CPU time data and first calculated the total time between the two sets of data by adding the total time from one and subtracting that from the total time of the other. It calculates the difference in non-use time in the same way but only adding/subtracting the idle and iowait times. It then returns the use time, which is just total time minus non-use time, as a percentage of total time.
 
 ### Outputting the Data
+The memory and CPU graphs are outputted using `outputMemoryUtilization` and `outputCPUUtilization` respectively. The way they are printed are very similar. The axes are outputted first, starting at the left side of the terminal and at the given starting row. The y-axis is drawn relative to the length of the maximum value, meaning the maximum RAM or 100%. The x-axis' length corresponds to the number of samples. Then, one individual character is outputted representing the memory/CPU usage at the given sample. 
+
+The cores info is outputted using `outputCores`. This prints the maximum frequency and then in rows of four the number of cores represented by squares. This starts at the given start row. 
+
+### Delay
+Since `usleep` does not conform to the C99 standard, I opted to write my own delay function using the `time.h` library. This function works by getting the current time on start, and looping continuously while calculating the elapsed time by subtracting the start time from the current time and converting to microseconds. Once the elapsed time is greater than or equal to the time we want to delay the program in microseconds, the loop and the function ends. 
+
+### Main Function
+The `main` function first gets and processes the arguments. Then, it clears the terminal and moves the cursor to the top left of the screen and outputs the number of samples and the delay. It then checks if CPU info is being requested. If so, it retrieves an initial sample of the CPU info and delays because to process the CPU info two sets of information is needed. Then, it moves on to the main loop. The loop only runs if either CPU or memory info is being requested, as we only need to retrieve cores info once. If so, it loops for the number of samples and retrieves the necessary data first. Then, it processes it and then finally outputs it and delays. At the end, if cores info is being requested, it will retrieve and output it and finally exits the program. 
